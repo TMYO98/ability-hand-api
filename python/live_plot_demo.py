@@ -9,8 +9,17 @@ import platform
 import math
 import keyboard
 import argparse
+import csv
+import csv
+import os
 
+laptime = 120
+lapsPerLoop = 10
+Iterations = 5
+loopDelay = 1800
+Start_Time = time.time()
 ser = []
+espSer = []
 reset_count = 0
 total_count = 0
 tstart = 0
@@ -21,9 +30,20 @@ plot_position = False
 plot_touch = False
 
 
+def write_to_csv(ARRAY, filename):
+    headers = ["current", "voltage", "temperature", "Elapsed-Time", "Motor-Temperature"]
+    file_exists = os.path.isfile(filename)
+    
+    with open(filename, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        if not file_exists:
+            writer.writerow(headers)
+        writer.writerow(ARRAY[:5])
+
 ## Search for Serial Port to use
 def setupSerial(baud):
 	global ser
+	global espSer
 
 	print("Searching for serial ports...")
 	com_ports_list = list(list_ports.comports())
@@ -37,7 +57,7 @@ def setupSerial(baud):
 					print("Found:", port)
 					break
 			elif platform.system() == 'Windows':
-				if "COM" in p[0]:
+				if "COM7" in p[0]:
 					port = p
 					print("Found:", port)
 					break
@@ -47,7 +67,9 @@ def setupSerial(baud):
 		
 	try: 
 		print("Connecting...")
+		print(port)
 		ser = serial.Serial(port[0], baud, timeout = 0.02)
+		espSer = serial.Serial("COM9", 115200, timeout = 0.02)
 		print("Connected!")
 	except: 
 		print("Failed to Connect!")
@@ -99,7 +121,7 @@ def generateTX(positions):
 
 
 ## Read keyboard input and calculate positions
-isFingerWave = False
+isFingerWave = True
 def calculatePositions(currentPositions, lastCommand):
 	global isFingerWave
 	global tstart
@@ -109,16 +131,17 @@ def calculatePositions(currentPositions, lastCommand):
 	## Check keyboard input to see what to do
 	## Up/Down only when pressed
 	## Finger wave continues when key released
-	if keyboard.is_pressed('esc'):
-		isFingerWave = False
-	elif keyboard.is_pressed('up') or keyboard.is_pressed('w'):
-		isFingerWave = False
-		moveUp = True
-	elif keyboard.is_pressed('down') or keyboard.is_pressed('s'):
-		isFingerWave = False
-		moveDown = True
-	elif keyboard.is_pressed('space'):
-		isFingerWave = True
+	# if keyboard.is_pressed('esc'):
+	# 	isFingerWave = False
+	# 	exit()
+	# elif keyboard.is_pressed('up') or keyboard.is_pressed('w'):
+	# 	isFingerWave = False
+	# 	moveUp = True
+	# elif keyboard.is_pressed('down') or keyboard.is_pressed('s'):
+	# 	isFingerWave = False
+	# 	moveDown = True
+	# elif keyboard.is_pressed('space'):
+	# 	isFingerWave = True
 	
 	positions = [0.0] * 6
 	
@@ -126,8 +149,8 @@ def calculatePositions(currentPositions, lastCommand):
 	for i in range(0,6):
 		## Wave fingers in sinusoudal pattern with offset from each other
 		if isFingerWave:
-			ft = time.time() * 3 + i
-			positions[i] = (0.5*math.sin(ft) + 0.5) * 45 + 15
+			ft = time.time() * 25 + i
+			positions[i] = (0.5*math.sin(ft) + 0.5) * 45 + 20
 		## Move up/open from current position
 		elif moveUp:
 			positions[i] = abs(lastCommand[i]) - 0.5
@@ -154,11 +177,16 @@ def calculatePositions(currentPositions, lastCommand):
 
 ## Communicate with the hand 
 def serialComm():
-
+	global Start_Time
 	global tstart
 	global reset_count
 	global total_count
 	global num_lines
+	global isFingerWave
+	temp = 0
+
+	counter = 0
+	counter2 = 0
 	
 	## Upsample the thumb rotator
 	msg = create_misc_msg(0xC2)
@@ -168,6 +196,7 @@ def serialComm():
 	## Resused arrays for position
 	## Safe "last position" for hand to start at
 	posRead = [15] * 6
+	CurrentRead = [0] * 6
 	posRead[5] = -posRead[5]
 	prev_posRead = posRead.copy()
 	lastPosCmd = posRead.copy()
@@ -183,6 +212,22 @@ def serialComm():
 	ser.reset_input_buffer()	
 	
 	while 1:
+		if(time.time() - Start_Time> laptime): #tiempo de muestreo
+			Start_Time = time.time()
+			counter = counter + 1
+			isFingerWave = not(isFingerWave)
+			
+		if(counter == lapsPerLoop):
+			counter2 = counter2 +1			
+			counter = 0
+			if(counter2 == Iterations):
+				exit()
+			time.sleep(loopDelay) # tiempo de descanso para el motor
+			espSer.flush()
+			espSer.read_all()
+			Start_Time = time.time()
+
+		
 		t = time.time() - tstart
 		
 		## Get message with new positions
@@ -198,9 +243,11 @@ def serialComm():
 		data = ser.read(1)
 		if len(data) == 1:
 			replyFormat = data[0]
+			
 			## Reply variant 3 length is 
 			if (replyFormat & 0xF) == 2:
 				replyLen = 38
+				
 			else:
 				replyLen = 71
 			##read the rest of the data
@@ -219,15 +266,42 @@ def serialComm():
 					## Extract Position Data
 					## Position Data is included in all formats in same way
 					## So we can safely do this no matter the format
+					
 					for i in range(0, 6):
 						rawData = struct.unpack('<h', data[i*4:2+(i*4)])[0]
 						posRead[i] = rawData * 150 / 32767
 						
+						# print(posRead)
+						# [0] current
+						# [1] voltage
+						# [2] internal temp
+						
 						## Bad data, reset serial device - probably framing error
 						if posRead[i] > 150:
 							needReset = True
-					
+					# print(data)
+					# for i in range(7, 14):
+					# 	rawData = struct.unpack('<h', data[i*4:2+(i*4)])[0]
+					# 	# CurrentRead[i] = rawData * 150 / 32767
+					# 	print(rawData)
+
+					## add to csv
+					##falta lectura de la temperatura del motor
+					try:
+						tem = espSer.read(5)
+						if(len(tem)>4):
+							temp = float(tem.decode('ascii'))
+						if(temp>0):
+
+							posRead[3] = time.time() - Start_Time
+							posRead[4] = temp ## agregar temperatura del motor
+							write_to_csv(posRead,"AI_Data Test" + str(counter2) + ".csv")
+					except:
+						print("NEL")	
+
+
 					## Extract Touch Data if Available
+					
 					if replyLen == 71:
 						## Extract Data two at a time
 						for i in range(0, 15):
@@ -254,6 +328,8 @@ def serialComm():
 		prev_posRead = posRead.copy()
 		prev_touchRead = touchRead.copy()
 		if num_lines == 6:
+			posRead[3] = time.time() - Start_Time
+			posRead[4] = temp ## agregar temperatura del motor
 			for i in range(0,6):
 				plotData[i+1] = posRead[i]
 		elif num_lines == 30:
@@ -287,7 +363,7 @@ def start_plot(bufWidth, position, touch):
 	if plot_position:
 		num_lines = 6
 		reply_mode = 0x12
-		plot_floats(num_lines, bufWidth, serialComm, (0,90), (0,30), title="Ability Hand Finger Positions", xlabel="Time(s)", ylabel="Finger Angle (degrees)")
+		plot_floats(num_lines, bufWidth, serialComm, (0,60), (0,30), title="Ability Hand Finger Positions", xlabel="Time(s)", ylabel="Finger Angle (degrees)")
 	elif plot_touch:
 		num_lines = 30
 		reply_mode = 0x10
@@ -342,7 +418,5 @@ if __name__ == "__main__":
 	print("Baud Rate: " + str(args.baud))
 	print("Hand Address: " + str(args.address))
 	print("Buffer Width: " + str(args.width))
-
-	
 	plot_lines(args.baud, args.address, args.width, pos, touch)  
 
