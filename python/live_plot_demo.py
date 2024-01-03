@@ -30,14 +30,24 @@ plot_position = False
 plot_touch = False
 
 
+
 def write_to_csv(ARRAY, filename):
     headers = ["current", "voltage", "temperature", "Elapsed-Time", "Motor-Temperature"]
-    file_exists = os.path.isfile(filename)
+    directory = 'C:\\Users\\jctam\\OneDrive\\Escritorio\\PSYONIC\\ability-hand-api\\python\\DataForTraining\\'
+    file_path = os.path.join(directory, filename)
     
-    with open(filename, mode='a', newline='') as file:
+    # Ensure the directory exists
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    file_exists = os.path.isfile(file_path)
+
+    with open(file_path, mode='a', newline='') as file:
         writer = csv.writer(file)
+
         if not file_exists:
             writer.writerow(headers)
+
         writer.writerow(ARRAY[:5])
 
 ## Search for Serial Port to use
@@ -69,7 +79,7 @@ def setupSerial(baud):
 		print("Connecting...")
 		print(port)
 		ser = serial.Serial(port[0], baud, timeout = 0.02)
-		espSer = serial.Serial("COM9", 115200, timeout = 0.02)
+		espSer = serial.Serial("COM12", 115200, timeout = 0.02)
 		print("Connected!")
 	except: 
 		print("Failed to Connect!")
@@ -149,7 +159,7 @@ def calculatePositions(currentPositions, lastCommand):
 	for i in range(0,6):
 		## Wave fingers in sinusoudal pattern with offset from each other
 		if isFingerWave:
-			ft = time.time() * 25 + i
+			ft = time.time() * 10 + i
 			positions[i] = (0.5*math.sin(ft) + 0.5) * 45 + 20
 		## Move up/open from current position
 		elif moveUp:
@@ -292,10 +302,9 @@ def serialComm():
 						if(len(tem)>4):
 							temp = float(tem.decode('ascii'))
 						if(temp>0):
-
-							posRead[3] = time.time() - Start_Time
 							posRead[4] = temp ## agregar temperatura del motor
-							write_to_csv(posRead,"AI_Data Test" + str(counter2) + ".csv")
+						posRead[3] = time.time() - Start_Time						
+						write_to_csv(posRead,"AI_Data_TestOTHERtemp2.csv")
 					except:
 						print("NEL")	
 
@@ -363,7 +372,7 @@ def start_plot(bufWidth, position, touch):
 	if plot_position:
 		num_lines = 6
 		reply_mode = 0x12
-		plot_floats(num_lines, bufWidth, serialComm, (0,60), (0,30), title="Ability Hand Finger Positions", xlabel="Time(s)", ylabel="Finger Angle (degrees)")
+		plot_floats(num_lines, bufWidth, serialComm, (0,90), (0,50), title="Ability Hand Finger Positions", xlabel="Time(s)", ylabel="Finger Angle (degrees)")
 	elif plot_touch:
 		num_lines = 30
 		reply_mode = 0x10

@@ -6,32 +6,44 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
-integral_len = 30
-Kt = -0.00005
+integral_len = 40
+integral_len2 = 80
+Kt = 0.000
+integral = 0
 
 # Step 1: Data Preprocessing
 # folder_path = 'C:/Users/jctam/OneDrive/Escritorio/PSYONIC/ability-hand-api/python/DataForTraining/'  # Replace with your folder path
 # file_names = [file for file in os.listdir(folder_path) if file.endswith(".csv")]
 # data = pd.concat([pd.read_csv(folder_path+file) for file in file_names])
-data = pd.read_csv('C:/Users/jctam/OneDrive/Escritorio/PSYONIC/ability-hand-api/python/DataForTraining/AI_Data_Test4Iteration1.csv')
+data = pd.read_csv('C:/Users/jctam/OneDrive/Escritorio/PSYONIC/ability-hand-api/python/DataForTraining/AI_Data_TestOTHERtemp2.csv')
 
 # Calculate power in watts and take the absolute value
 data['Power (W)'] = data['current'] * data['voltage']
 data['Power (W)'] = data['Power (W)'].abs()
 data['Power_Integ'] = data['Power (W)'].abs()
-data['Temp_Observer'] = data['temperature']
+data['Temp_Observer'] = data['Motor-Temperature']
 lenght = len(data['Power (W)'])
+cooling_Ratio = 0
 # print(data['Temp_Observer'])
 
 
 Power = [0] * integral_len #Init empty array
+Power2 = [0] * integral_len2 #Init empty array
 for j in range (lenght):
     for i in range(integral_len-1,0,-1):
-        Power[i] = Power[i-1]        
+        Power[i] = Power[i-1] 
+    for i in range(integral_len2-1,0,-1):
+        Power2[i] = Power2[i-1]       
     Power[0] = data['Power (W)'][j]
-    data['Power_Integ'][j] = sum(Power)*.00051
+    Power2[0] = data['Power (W)'][j]
+    data['Power_Integ'][j] = sum(Power)*.00016
+    integral = sum(Power2)*.000003
     if(j>1):
-        data['Temp_Observer'][j] = data['Power_Integ'][j] + (data['temperature'][j] - data['Temp_Observer'][j-1])*Kt + data['Temp_Observer'][j-1]
+        if(integral == 0 and data['Temp_Observer'][j-1] >25):
+            cooling_Ratio = -0.000009 * data['Temp_Observer'][j-1]
+        else:
+            cooling_Ratio = integral
+        data['Temp_Observer'][j] = data['Power_Integ'][j] + cooling_Ratio + data['Temp_Observer'][j-1]
 
 
 # Select relevant features
@@ -43,10 +55,10 @@ y = data['Elapsed-Time']
 # print(y)
 
 plt.plot(data[['Power (W)']], label= "Power")
-# plt.plot(data[['temperature']], label= "uTemp")
-# plt.plot(data[['Motor-Temperature']], label= "mTemp")
+plt.plot(data[['temperature']], label= "uTemp")
+plt.plot(data[['Motor-Temperature']], label= "mTemp")
 plt.plot(data[['Power_Integ']], label= "Pow_int")
-# plt.plot(data[['Temp_Observer']], label= "Temp_obs")
+plt.plot(data[['Temp_Observer']], label= "Temp_obs")
 plt.legend()
 plt.show()
 
