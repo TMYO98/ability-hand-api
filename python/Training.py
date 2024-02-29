@@ -5,6 +5,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import math 
 
 integral_len = 40
 integral_len2 = 80
@@ -15,7 +16,7 @@ integral = 0
 # folder_path = 'C:/Users/jctam/OneDrive/Escritorio/PSYONIC/ability-hand-api/python/DataForTraining/'  # Replace with your folder path
 # file_names = [file for file in os.listdir(folder_path) if file.endswith(".csv")]
 # data = pd.concat([pd.read_csv(folder_path+file) for file in file_names])
-data = pd.read_csv('C:/Users/jctam/OneDrive/Escritorio/PSYONIC/ability-hand-api/python/DataForTraining/AI_Data_TestOTHERtemp2.csv')
+data = pd.read_csv('D:/Me/Trabajo2023/Psyonic/ability-hand-api/python\DataForTraining/Other_tests/AI_Data_Test4.csv')
 
 # Calculate power in watts and take the absolute value
 data['Power (W)'] = data['current'] * data['voltage']
@@ -32,18 +33,20 @@ Power2 = [0] * integral_len2 #Init empty array
 for j in range (lenght):
     for i in range(integral_len-1,0,-1):
         Power[i] = Power[i-1] 
-    for i in range(integral_len2-1,0,-1):
-        Power2[i] = Power2[i-1]       
+    # for i in range(integral_len2-1,0,-1):
+    #     Power2[i] = Power2[i-1]       
     Power[0] = data['Power (W)'][j]
-    Power2[0] = data['Power (W)'][j]
-    data['Power_Integ'][j] = sum(Power)*.00016
-    integral = sum(Power2)*.000003
+    # Power2[0] = data['Power (W)'][j]
+    data.loc[j, 'Power_Integ'] = sum(Power) * 0.00035
+    # integral = sum(Power2)*.000003 # 
     if(j>1):
         if(integral == 0 and data['Temp_Observer'][j-1] >25):
-            cooling_Ratio = -0.000009 * data['Temp_Observer'][j-1]
+            # cooling_Ratio = math.log10(abs(data['temperature'][j] - data['Temp_Observer'][j-1]))*.00001
+            cooling_Ratio = (data['temperature'][j] - data['Temp_Observer'][j-1])*.00005
+            # cooling_Ratio = (data['Power_Integ'][j-1] - data['Power_Integ'][j])*30
         else:
-            cooling_Ratio = integral
-        data['Temp_Observer'][j] = data['Power_Integ'][j] + cooling_Ratio + data['Temp_Observer'][j-1]
+            cooling_Ratio = 0
+        data.loc[j, 'Temp_Observer'] = data['Power_Integ'][j] + cooling_Ratio + data['Temp_Observer'][j-1]
 
 
 # Select relevant features
