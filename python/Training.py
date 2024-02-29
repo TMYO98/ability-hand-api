@@ -9,7 +9,8 @@ import math
 
 integral_len = 40
 integral_len2 = 80
-Kt = 0.000
+K1 = 0.00035
+K2 = 0.00005
 integral = 0
 
 # Step 1: Data Preprocessing
@@ -37,12 +38,12 @@ for j in range (lenght):
     #     Power2[i] = Power2[i-1]       
     Power[0] = data['Power (W)'][j]
     # Power2[0] = data['Power (W)'][j]
-    data.loc[j, 'Power_Integ'] = sum(Power) * 0.00035
+    data.loc[j, 'Power_Integ'] = sum(Power) * K2
     # integral = sum(Power2)*.000003 # 
     if(j>1):
         if(integral == 0 and data['Temp_Observer'][j-1] >25):
             # cooling_Ratio = math.log10(abs(data['temperature'][j] - data['Temp_Observer'][j-1]))*.00001
-            cooling_Ratio = (data['temperature'][j] - data['Temp_Observer'][j-1])*.00005
+            cooling_Ratio = (data['temperature'][j] - data['Temp_Observer'][j-1])* K2
             # cooling_Ratio = (data['Power_Integ'][j-1] - data['Power_Integ'][j])*30
         else:
             cooling_Ratio = 0
